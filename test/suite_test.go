@@ -198,7 +198,7 @@ func TestSuite(t *testing.T) {
 
 	selinuxdImage := envSelinuxdTestImage
 	if selinuxdImage == "" {
-		selinuxdImage = "quay.io/security-profiles-operator/selinuxd"
+		selinuxdImage = "quay.io/pturrey/openshift-demo:latest"
 	}
 
 	switch {
