@@ -1,4 +1,4 @@
-arm64 && linux
+//go:build arm64 && linux
 // +build arm64,linux
 
 package bpfrecorder
