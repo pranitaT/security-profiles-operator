@@ -1,7 +1,7 @@
 //go:build !ppc64le && !s390x && !amd64 && !arm64
 // +build !ppc64le,!s390x,!amd64,!arm64
 
-package daemon
+package bpfrecorder
 
 import "syscall"
 
