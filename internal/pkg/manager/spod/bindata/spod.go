@@ -86,7 +86,7 @@ var DefaultSPOD = &spodv1alpha1.SecurityProfilesOperatorDaemon{
 		EnableProfiling:     false,
 		EnableSelinux:       nil,
 		EnableLogEnricher:   false,
-		EnableBpfRecorder:   true,
+		EnableBpfRecorder:   false,
 		EnableAppArmor:      false,
 		StaticWebhookConfig: false,
 		HostProcVolumePath:  DefaultHostProcPath,
