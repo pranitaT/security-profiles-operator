@@ -9,7 +9,8 @@
         "accept4",
         "access",
         "arch_prctl",
-        "bind",
+        "bind"
+        "bpf",
         "brk",
         "capget",
         "capset",

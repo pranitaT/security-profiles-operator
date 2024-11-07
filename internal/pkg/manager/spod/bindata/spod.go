@@ -139,7 +139,9 @@ var Manifest = &appsv1.DaemonSet{
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					"openshift.io/scc": "privileged",
+					"openshift.io/scc":                          "privileged",
+					"io.containers.trace-syscall":               "true",
+					"io.kubernetes.cri-o.seccompNotifierAction": "true",
 				},
 				Labels: map[string]string{
 					"app":  config.OperatorName,
@@ -391,6 +393,10 @@ semodule -i /opt/spo-profiles/selinuxrecording.cil
 							{
 								Name:  "HOME",
 								Value: HomeDirectory,
+							},
+							{
+								Name:  "SPO_VERBOSITY",
+								Value: "2",
 							},
 						},
 						Ports: []corev1.ContainerPort{
