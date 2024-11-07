@@ -665,8 +665,13 @@ func saveProfileOnDisk(fileName string, content []byte) (updated bool, err error
 	fmt.Printf("L666: saveProfileOnDisk: mainDirPath: %s mainFilename: %s\n", mainDirPath, mainFilename)
 
 	// Check if the main directory exists, create it if it does not
-	if err := os.MkdirAll(mainDirPath, dirPermissionMode); err != nil {
-		fmt.Printf("Error creating directory: %v\n", err)
+	if _, err := os.Stat(mainDirPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(mainDirPath, dirPermissionMode); err != nil {
+			fmt.Printf("Error creating directory: %v\n", err)
+			return false, err
+		}
+	} else if err != nil {
+		fmt.Printf("Error checking directory: %v\n", err)
 		return false, err
 	}
 
