@@ -130,6 +130,7 @@
         "setuid",
         "sigaltstack",
         "socket",
+        "stat",
         "statfs",
         "symlinkat",
         "tgkill",
