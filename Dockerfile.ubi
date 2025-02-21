@@ -24,7 +24,8 @@ WORKDIR /work
 
 RUN dnf install -y \
   libseccomp-devel \
-  libbpf
+  libbpf \
+  kernel-headers  
 
 ADD . /work
 RUN mkdir -p build
@@ -37,7 +38,7 @@ RUN ARCH=$(arch | sed 's|x86_64|amd64|g' | sed 's|aarch64|arm64|g') && \
 ENV PATH="/usr/local/go/bin:$PATH"
 
 ARG APPARMOR_ENABLED=0
-ARG BPF_ENABLED=0
+ARG BPF_ENABLED=1
 
 # OCP in FIPS mode doesn't like statically linked SPO
 ARG STATIC_LINK=no
@@ -51,7 +52,8 @@ USER root
 
 RUN microdnf install -y \
   libseccomp \
-  libbpf
+  libbpf \
+  kernel-headers  
 
 LABEL name="Security Profiles Operator" \
   version=$version \

@@ -60,6 +60,7 @@ data:
             "arch_prctl",
             "bind",
             "brk",
+            "bpf",
             "capget",
             "capset",
             "chdir",
