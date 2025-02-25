@@ -1,5 +1,5 @@
-//go:build ppc64le && linux
-// +build ppc64le,linux
+//go:build !no_bpf && ppc64le && linux
+// +build !no_bpf,ppc64le,linux
 
 /*
 Copyright 2024 The Kubernetes Authors.
