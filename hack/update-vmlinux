@@ -11,6 +11,7 @@ ROOT_DIR=$(git rev-parse --show-toplevel)
 VMLINUX_DIR="$ROOT_DIR/internal/pkg/daemon/bpfrecorder/vmlinux"
 
 # Clean and create the vmlinux directory
+echo "Cleaning and creating vmlinux directory at $VMLINUX_DIR"
 rm -rf "$VMLINUX_DIR"
 mkdir -p "$VMLINUX_DIR"
 
@@ -20,74 +21,74 @@ declare -A ARCHES=(
     ["ppc64le"]="ppc64le"
 )
 
-# Detect the current architecture
-CURRENT_ARCH=$(uname -m)
+# Iterate through each architecture in the ARCHES array
+for ARCH in "${!ARCHES[@]}"; do
+    echo "Processing architecture: $ARCH"
 
-if [[ ! -v ARCHES[$CURRENT_ARCH] ]]; then
-    echo "Error: Unsupported architecture: $CURRENT_ARCH"
-    exit 1
-fi
+    # Determine the correct URL for the architecture
+    if [ "$ARCH" = "ppc64le" ]; then
+        URL=$SECONDARY_URL/Everything/$ARCH/debug/tree/Packages/k
+    else
+        URL=$BASE_URL/Everything/$ARCH/debug/tree/Packages/k
+    fi
 
-ARCH=$CURRENT_ARCH
-echo "Detected architecture: $ARCH"
+    echo "Fetching kernel debuginfo package list from $URL"
+    KERNEL=$(curl -sSfL "$URL" | grep -oE '>kernel-debuginfo-[0-9].*?\.rpm' | head -n 1)
 
-if [ "$ARCH" = "ppc64le" ]; then
-    URL=$SECONDARY_URL/Everything/$ARCH/debug/tree/Packages/k
-else
-    URL=$BASE_URL/Everything/$ARCH/debug/tree/Packages/k
-fi
+    # If no kernel debuginfo is found, continue to the next architecture
+    if [ -z "$KERNEL" ]; then
+        echo "Error: No kernel debuginfo RPM found at $URL for architecture $ARCH"
+        continue
+    fi
 
-echo "Fetching kernel debuginfo package list from $URL"
-KERNEL=$(curl -sSfL "$URL" | grep -oE '>kernel-debuginfo-[0-9].*?\.rpm' | head -n 1)
-if [ -z "$KERNEL" ]; then
-    echo "Error: No kernel debuginfo RPM found at $URL"
-    exit 1
-fi
-KERNEL_URL="$URL/${KERNEL:1}"
-echo "Using kernel $KERNEL_URL"
+    KERNEL_URL="$URL/${KERNEL:1}"
+    echo "Using kernel $KERNEL_URL"
 
-TEMPDIR=$(mktemp -d)
-trap 'rm -rf $TEMPDIR' EXIT
-pushd "$TEMPDIR"
-RPM=kernel.rpm
-echo "Downloading kernel RPM to $TEMPDIR"
-curl -SfL "$KERNEL_URL" -o $RPM
-echo "Querying RPM for vmlinux path"
-rpmquery -qlp $RPM > rpm_contents.txt
-cat rpm_contents.txt
-VMLINUX=$(grep vmlinux rpm_contents.txt | head -n 1)
-if [ -z "$VMLINUX" ]; then
-    echo "Error: vmlinux file not found in $RPM"
-    exit 1
-fi
-echo "Extracting vmlinux from RPM: $VMLINUX"
-rpm2cpio $RPM | cpio -idv ."$VMLINUX"
+    # Create a temporary directory for processing
+    TEMPDIR=$(mktemp -d)
+    trap 'rm -rf $TEMPDIR' EXIT
+    pushd "$TEMPDIR"
+    RPM=kernel.rpm
 
-KERNEL_VERSION=$(echo "$VMLINUX" | cut -d/ -f7)
-echo "Kernel version: $KERNEL_VERSION"
-TARGET_DIR=$VMLINUX_DIR/${ARCHES[$ARCH]}
-mkdir -p "$TARGET_DIR"
+    echo "Downloading kernel RPM to $TEMPDIR"
+    curl -SfL "$KERNEL_URL" -o $RPM
 
-if [ "$ARCH" = "ppc64le" ]; then
-    echo "Dumping BTF from pre-existing vmlinux to $TARGET_DIR/$KERNEL_VERSION.vmlinux.h"
-    bpftool btf dump file "/usr/lib/debug/lib/modules/$(uname -r)/vmlinux" format c >"$TARGET_DIR/$KERNEL_VERSION.vmlinux.h" || {
-        echo "Error: failed to load BTF from /usr/lib/debug/lib/modules/$(uname -r)/vmlinux"
-        exit 1
-    }
-else
+    # Query the RPM for the vmlinux path
+    echo "Querying RPM for vmlinux path"
+    rpmquery -qlp $RPM > rpm_contents.txt
+    cat rpm_contents.txt
+
+    # Extract the vmlinux path
+    VMLINUX=$(grep -E '/vmlinux$' rpm_contents.txt | head -n 1)
+    if [ -z "$VMLINUX" ]; then
+        echo "Error: vmlinux file not found in $RPM for architecture $ARCH"
+        popd
+        continue
+    fi
+
+    echo "Extracting vmlinux from RPM: $VMLINUX"
+    rpm2cpio $RPM | cpio -idv .$VMLINUX
+
+    # Extract the kernel version
+    KERNEL_VERSION=$(echo "$VMLINUX" | cut -d/ -f7)
+    echo "Kernel version: $KERNEL_VERSION"
+
+    TARGET_DIR="$VMLINUX_DIR/${ARCHES[$ARCH]}"
+    mkdir -p "$TARGET_DIR"
+
+    # Dump BTF from vmlinux and save it to the target directory
     echo "Dumping BTF from vmlinux to $TARGET_DIR/$KERNEL_VERSION.vmlinux.h"
-    bpftool btf dump file ".$VMLINUX" format c >"$TARGET_DIR/$KERNEL_VERSION.vmlinux.h" || {
-        echo "Error: failed to load BTF from .$VMLINUX"
-        exit 1
+    bpftool btf dump file .$VMLINUX format c > "$TARGET_DIR/$KERNEL_VERSION.vmlinux.h" || {
+        echo "Error: failed to load BTF from $VMLINUX"
+        popd
+        continue
     }
-fi
 
-pushd "$TARGET_DIR"
-ln -sf "$KERNEL_VERSION.vmlinux.h" vmlinux.h
-popd
+    # Create symbolic link to the vmlinux header
+    echo "Creating symbolic link: $TARGET_DIR/vmlinux.h"
+    ln -sf "$TARGET_DIR/$KERNEL_VERSION.vmlinux.h" "$TARGET_DIR/vmlinux.h"
 
-popd
-rm -rf "$TEMPDIR"
+    popd
+done
 
-echo "Script completed successfully."
-
+echo "vmlinux update script completed successfully."

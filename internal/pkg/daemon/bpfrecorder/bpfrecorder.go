@@ -483,8 +483,8 @@ func (b *BpfRecorder) Load() (err error) {
 		bpfObject = bpfAmd64
 	case "arm64":
 		bpfObject = bpfArm64
-       case "ppc64le":
-               bpfObject = bpfPpc64le
+    case "ppc64le":
+        bpfObject = bpfPpc64le
 	default:
 		return fmt.Errorf("architecture %s is currently unsupported", runtime.GOARCH)
 	}

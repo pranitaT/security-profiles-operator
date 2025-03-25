@@ -21,6 +21,13 @@ package bpfrecorder
 
 import "syscall"
 
+// Note: This feature is not supported in kernel versions prior to 5.7, 
+// as it depends on the BPF_LINK_CREATE structure introduced in that version.
+// For further details, please refer to the documentation: https://docs.ebpf.io/linux/syscall/BPF_LINK_CREATE/
+// 
+// TODO: We may consider adding conditional logic to filter kernel versions 
+// based on their major and minor version, to selectively enable or disable 
+// certain hooks depending on the kernel's capabilities and support.
 var baseHooks = []string{
         "sys_enter",
 //      "sys_exit_clone",
