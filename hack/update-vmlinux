@@ -1,43 +1,81 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION=37
+# Version 37 no longer exists at this location and is in the archive.
+# We chose to use the latest version 40.
+VERSION=40
 
 BASE_URL=https://dl.fedoraproject.org/pub/fedora/linux/releases/$VERSION
+SECONDARY_URL=https://dl.fedoraproject.org/pub/fedora-secondary/releases/$VERSION
 ROOT_DIR=$(git rev-parse --show-toplevel)
 VMLINUX_DIR="$ROOT_DIR/internal/pkg/daemon/bpfrecorder/vmlinux"
 
+# Clean and create vmlinux directory
 rm -rf "$VMLINUX_DIR"
 mkdir -p "$VMLINUX_DIR"
 
 declare -A ARCHES=(
     ["x86_64"]="x86"
     ["aarch64"]="arm64"
+    ["ppc64le"]="ppc64le"  # Added ppc64le
 )
 
 for ARCH in "${!ARCHES[@]}"; do
-    URL=$BASE_URL/Everything/$ARCH/debug/tree/Packages/k
-    KERNEL=$(curl -sSfL "$URL" | grep -oE '>kernel-debuginfo-[0-9].*?\.rpm')
-    KERNEL_URL="$URL/${KERNEL:1}"
-    echo "Using kernel $KERNEL_URL"
+    echo "Processing architecture: $ARCH"
 
+    # Set correct URL for fetching kernel debuginfo
+    if [ "$ARCH" = "ppc64le" ]; then
+        URL=$SECONDARY_URL/Everything/$ARCH/debug/tree/Packages/k
+    else
+        URL=$BASE_URL/Everything/$ARCH/debug/tree/Packages/k
+    fi
+
+    echo "Fetching kernel debuginfo package list from $URL"
+    KERNEL=$(curl -sSfL "$URL" | grep -oE '>kernel-debuginfo-[0-9].*?\.rpm' | head -n 1 | tr -d '>')
+
+    if [ -z "$KERNEL" ]; then
+        echo "Error: No kernel debuginfo RPM found for $ARCH"
+        continue
+    fi
+
+    KERNEL_URL="$URL/$KERNEL"
+    echo "Using kernel: $KERNEL_URL"
+
+    # Create temporary directory for processing
     TEMPDIR=$(mktemp -d)
-    trap 'rm -rf $TEMPDIR' EXIT
+    trap 'rm -rf "$TEMPDIR"' EXIT
     pushd "$TEMPDIR"
-    RPM=kernel.rpm
-    curl -SfL "$KERNEL_URL" -o $RPM
-    VMLINUX=$(rpmquery -qlp $RPM 2>&1 | grep vmlinux)
-    rpm2cpio $RPM | cpio -idv ."$VMLINUX"
 
-    KERNEL_VERSION=$(echo "$VMLINUX" | cut -d/ -f7)
-    TARGET_DIR=$VMLINUX_DIR/${ARCHES[$ARCH]}
+    RPM="kernel.rpm"
+    echo "Downloading kernel RPM to $TEMPDIR"
+    curl -SfL "$KERNEL_URL" -o "$RPM"
+
+    echo "Extracting vmlinux from RPM using rpm2cpio"
+    rpm2cpio "$RPM" | cpio -idmv --no-absolute-filenames
+    VMLINUX=$(find . -type f -name "vmlinux" | head -n 1)
+
+    if [ -z "$VMLINUX" ]; then
+        echo "Error: vmlinux file not found in $RPM for architecture $ARCH"
+        popd
+        continue
+    fi
+
+    KERNEL_VERSION=$(basename "$(dirname "$VMLINUX")")
+    TARGET_DIR="$VMLINUX_DIR/${ARCHES[$ARCH]}"
     mkdir -p "$TARGET_DIR"
 
-    bpftool btf dump file ".$VMLINUX" format c >"$TARGET_DIR/$KERNEL_VERSION.vmlinux.h"
-    pushd "$TARGET_DIR"
-    ln -sf "$KERNEL_VERSION.vmlinux.h" vmlinux.h
-    popd
+    echo "Dumping BTF from vmlinux to $TARGET_DIR/$KERNEL_VERSION.vmlinux.h"
+    bpftool btf dump file "$VMLINUX" format c > "$TARGET_DIR/$KERNEL_VERSION.vmlinux.h" || {
+        echo "Error: failed to load BTF from $VMLINUX"
+        popd
+        continue
+    }
+
+    echo "Creating symbolic link: $TARGET_DIR/vmlinux.h"
+    ln -sf "$KERNEL_VERSION.vmlinux.h" "$TARGET_DIR/vmlinux.h"
 
     popd
     rm -rf "$TEMPDIR"
 done
+
+echo "vmlinux update script completed successfully."

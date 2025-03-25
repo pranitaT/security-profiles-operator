@@ -24,6 +24,26 @@ import (
 	"syscall"
 )
 
+// Note: "sys_exit_clone" This feature is not supported in kernel versions prior to 5.7,
+// as it depends on the BPF_LINK_CREATE structure introduced in that version.
+// For further details, please refer to the documentation: https://docs.ebpf.io/linux/syscall/BPF_LINK_CREATE/
+// 
+// TODO: We may consider adding conditional logic to filter kernel versions 
+// based on their major and minor version, to selectively enable or disable 
+// certain hooks depending on the kernel's capabilities and support.
+// getBaseHooks returns the list of base hooks.
+func getBaseHooks() []string {
+    return []string{
+        "sys_enter",
+        // "sys_exit_clone",
+        "sys_enter_execve",
+        "sys_enter_getgid",
+        "sys_enter_prctl",
+        "sched_process_exec",
+        "sched_process_exit",
+    }
+}
+
 // UnameMachineToString converts uname.Machine to a string for s390x/ppc64le.
 func UnameMachineToString(uname *syscall.Utsname) string {
 	return toStringUint8Z(uname.Machine)

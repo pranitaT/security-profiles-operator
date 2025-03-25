@@ -24,6 +24,19 @@ import (
 	"syscall"
 )
 
+// getBaseHooks returns the list of base hooks.
+func getBaseHooks() []string {
+    return []string{
+        "sys_enter",
+        "sys_exit_clone",
+        "sys_enter_execve",
+        "sys_enter_getgid",
+        "sys_enter_prctl",
+        "sched_process_exec",
+        "sched_process_exit",
+    }
+}
+
 // UnameMachineToString converts uname.Machine to a string for amd64.
 func UnameMachineToString(uname *syscall.Utsname) string {
 	return toStringInt8(uname.Machine)

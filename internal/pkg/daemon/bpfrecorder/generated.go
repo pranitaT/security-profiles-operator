@@ -27,6 +27,9 @@ var bpfAmd64 []byte
 //go:embed bpf/recorder.bpf.o.arm64
 var bpfArm64 []byte
 
+//go:embed bpf/recorder.bpf.o.ppc64le
+var bpfPpc64le []byte
+
 var btfJSON = `{
   "centos": {
     "7": {
