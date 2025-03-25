@@ -461,16 +461,6 @@ func (b *BpfRecorder) getMntnsForProfile(profile string) (uint32, bool) {
 	return 0, false
 }
 
-var baseHooks = []string{
-	"sys_enter",
-	"sys_exit_clone",
-	"sys_enter_execve",
-	"sys_enter_getgid",
-	"sys_enter_prctl",
-	"sched_process_exec",
-	"sched_process_exit",
-}
-
 // Load loads the BPF code, does relocations, and gets references to the programs we want to attach.
 // We try to front load as much work as possible so that starting a recording is quick.
 // Recorder start races with container initialization, so we can't spend too much time then.
@@ -493,6 +483,8 @@ func (b *BpfRecorder) Load() (err error) {
 		bpfObject = bpfAmd64
 	case "arm64":
 		bpfObject = bpfArm64
+       case "ppc64le":
+               bpfObject = bpfPpc64le
 	default:
 		return fmt.Errorf("architecture %s is currently unsupported", runtime.GOARCH)
 	}
@@ -723,7 +715,7 @@ func (b *BpfRecorder) findBtfPath() (string, error) {
 		return "", fmt.Errorf("uname syscall failed: %w", err)
 	}
 
-	arch := types.Arch(toStringInt8(uname.Machine))
+	arch := types.Arch(UnameMachineToString(&uname))
 	btfArch, ok := btfOsVersion[arch]
 
 	if !ok {
@@ -734,7 +726,7 @@ func (b *BpfRecorder) findBtfPath() (string, error) {
 
 	b.logger.Info(fmt.Sprintf("Architecture found in btf map: %s", arch))
 
-	release := toStringInt8(uname.Release)
+	release := UnameReleaseToString(&uname)
 
 	version, err := semver.Parse(release)
 	if err != nil {

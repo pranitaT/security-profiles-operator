@@ -37,7 +37,7 @@ BPF_PATH := internal/pkg/daemon/bpfrecorder/bpf
 ARCH ?= $(shell uname -m | \
 	sed 's/x86_64/amd64/' | \
 	sed 's/aarch64/arm64/' | \
-	sed 's/ppc64le/powerpc/' | \
+        sed 's/ppc64le/ppc64le/' | \
 	sed 's/mips.*/mips/')
 INCLUDES := -I$(BUILD_DIR)
 
@@ -328,7 +328,18 @@ $(BUILD_DIR)/mdtoc: $(BUILD_DIR)
 update-toc: $(BUILD_DIR)/mdtoc ## Update the table of contents for the documentation
 	git grep --name-only '<!-- toc -->' | grep -v Makefile | xargs $(BUILD_DIR)/mdtoc -i
 
-$(BUILD_DIR)/recorder.bpf.o: $(BUILD_DIR) ## Build the BPF module
+ifeq ($(ARCH),ppc64le)
+$(BUILD_DIR)/recorder.bpf.o: $(BUILD_DIR)
+	$(CLANG) -g -O2 \
+		-target bpf \
+		-D__TARGET_ARCH_powerpc \
+		-I /usr/include \
+		-I ./internal/pkg/daemon/bpfrecorder/vmlinux/$(ARCH) \
+		-c $(BPF_PATH)/recorder.bpf.c \
+		-o $@
+	$(LLVM_STRIP) -g $@
+else
+$(BUILD_DIR)/recorder.bpf.o: $(BUILD_DIR)
 	$(CLANG) -g -O2 \
 		-target bpf \
 		-D__TARGET_ARCH_$(ARCH) \
@@ -337,6 +348,7 @@ $(BUILD_DIR)/recorder.bpf.o: $(BUILD_DIR) ## Build the BPF module
 		-c $(BPF_PATH)/recorder.bpf.c \
 		-o $@
 	$(LLVM_STRIP) -g $@
+endif
 
 .PHONY: update-vmlinux
 update-vmlinux: ## Generate the vmlinux.h required for building the BPF modules.
@@ -348,13 +360,31 @@ update-btf: $(BUILD_DIR) ## Build and update all generated BTF code for supporte
 
 .PHONY: update-bpf
 update-bpf: clean \
-    internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.amd64 \
-    internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.arm64
+    internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.ppc64le
 
-internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.%: $(BPF_FILES) ## Build and update all generated BPF code with nix
+ifeq ($(ARCH),ppc64le)
+internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.ppc64le: $(BPF_FILES) internal/pkg/daemon/bpfrecorder/vmlinux/ppc64le/vmlinux.h
+	# Ensure the build directory exists
+	mkdir -p ./build
+	# Compile the BPF program for ppc64le
+	clang -g -O2 \
+		-target bpf \
+		-D__TARGET_ARCH_powerpc \
+		-I ./internal/pkg/daemon/bpfrecorder/vmlinux/ppc64le \
+		-c ./internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.c \
+		-o ./build/recorder.bpf.o.ppc64le
+	# Strip debug symbols
+	llvm-strip -g ./build/recorder.bpf.o.ppc64le
+	# Copy output file
+	cp -f ./build/recorder.bpf.o.ppc64le ./internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.ppc64le
+	# Set file permissions
+	chmod 0644 ./internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.ppc64le
+else
+internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.%: $(BPF_FILES)
 	nix-build nix/default-bpf-$*.nix
 	cp -f result/recorder.bpf.o ./internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.$*
 	chmod 0644 ./internal/pkg/daemon/bpfrecorder/bpf/recorder.bpf.o.$*
+endif
 
 # Verification targets
 
