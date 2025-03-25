@@ -24,6 +24,16 @@ import (
 	"syscall"
 )
 
+var baseHooks = []string{
+        "sys_enter",
+//      "sys_exit_clone",
+        "sys_enter_execve",
+        "sys_enter_getgid",
+        "sys_enter_prctl",
+        "sched_process_exec",
+        "sched_process_exit",
+}
+
 // UnameMachineToString converts uname.Machine to a string for s390x/ppc64le.
 func UnameMachineToString(uname *syscall.Utsname) string {
 	return toStringUint8Z(uname.Machine)
